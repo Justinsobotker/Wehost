@@ -5,21 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hosting & Charter Services - Cape Town</title>
 <style>
-  body { margin:0; font-family:sans-serif; background:black; color:white; }
+  body { margin:0; font-family:sans-serif; background:black; color:white; padding:0 1rem; }
   header { text-align:center; padding:2rem; border-bottom:1px solid rgba(255,255,255,0.2); }
   header img { width:240px; height:240px; object-fit:contain; margin-bottom:1rem; }
   h1 { font-size:2rem; margin:0.5rem 0; }
   p { color:rgba(255,255,255,0.7); max-width:600px; margin:0.5rem auto; }
-  .listings { display:grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap:1rem; padding:2rem; }
+  .listings { display:grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap:1rem; padding:2rem 0; }
   .card { background: rgba(255,255,255,0.1); padding:1rem; border-radius:1rem; }
+  .card img { width:100%; border-radius:0.5rem; margin-bottom:0.5rem; object-fit:cover; max-height:200px; }
   .card h3 { margin:0; }
   .card a { display:inline-block; margin-top:0.5rem; padding:0.3rem 0.5rem; background: rgba(255,255,255,0.2); color:white; text-decoration:none; border-radius:0.5rem; }
+  .card button { margin-top:0.5rem; padding:0.3rem 0.7rem; border-radius:0.5rem; border:1px solid white; background:none; color:white; cursor:pointer; }
   footer { text-align:center; padding:2rem; border-top:1px solid rgba(255,255,255,0.2); color:rgba(255,255,255,0.7); }
   .social a { margin:0 0.5rem; color:white; text-decoration:none; }
   button { padding:0.5rem 1rem; border-radius:1rem; border:1px solid white; background:none; color:white; cursor:pointer; }
-  #formModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; }
-  #formModal form { background:white; color:black; padding:1rem 2rem; border-radius:1rem; display:flex; flex-direction:column; gap:0.5rem; }
+  #formModal, #loginModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; }
+  #formModal form, #loginModal form { background:white; color:black; padding:1rem 2rem; border-radius:1rem; display:flex; flex-direction:column; gap:0.5rem; }
   input { padding:0.5rem; border-radius:0.5rem; border:1px solid #ccc; }
+  input:invalid { border-color:red; }
 </style>
 </head>
 <body>
@@ -27,24 +30,39 @@
 <header>
   <img src="Logo.png" alt="We Host Logo">
   <h1>Hosting & Charter Services in Cape Town</h1>
-  <p>Premium Hosting and Charter experiences in Cape Town. Create memorable moments and experience top class stay's with our managed listings!</p>
-  <button onclick="showForm()">Add Listing</button>
+  <p>Premium Hosting and Charter experiences in Cape Town. Create memorable moments and experience top class stays with our managed listings!</p>
+  <div id="adminButtons">
+    <button onclick="showLogin()">Admin Login</button>
+  </div>
 </header>
 
-<main class="listings" id="listings">
-  <!-- Listings will appear here -->
-</main>
+<main class="listings" id="listings"></main>
 
+<!-- Add/Edit Listing Modal -->
 <div id="formModal">
   <form onsubmit="saveListing(event)">
-    <h3>Add Listing</h3>
+    <h3 id="formTitle">Add Listing</h3>
+    <input type="hidden" id="editIndex">
     <input type="text" id="title" placeholder="Title" required>
     <input type="text" id="location" placeholder="Location" required>
-    <input type="url" id="url" placeholder="URL" required>
-    <input type="number" id="price" placeholder="Price (USD)" required>
+    <input type="url" id="url" placeholder="Booking URL" required>
+    <input type="url" id="image" placeholder="Image URL (optional)">
+    <input type="number" id="price" placeholder="Price (ZAR)" required>
     <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
       <button type="button" onclick="closeForm()">Cancel</button>
       <button type="submit">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- Admin Login Modal -->
+<div id="loginModal">
+  <form onsubmit="login(event)">
+    <h3>Admin Login</h3>
+    <input type="password" id="adminPassword" placeholder="Enter password" required>
+    <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+      <button type="button" onclick="closeLogin()">Cancel</button>
+      <button type="submit">Login</button>
     </div>
   </form>
 </div>
@@ -55,58 +73,191 @@
   <p>Phone: <a href="tel:+27211234567" style="color:white;">+27 21 123 4567</a></p>
   <p>Address: Cape Town, South Africa</p>
   <div class="social">
-    <a href="https://wa.me/your-number" target="_blank">WhatsApp</a>
-    <a href="https://www.facebook.com/your-page" target="_blank">Facebook</a>
-    <a href="https://www.instagram.com/your-page" target="_blank">Instagram</a>
-    <a href="https://www.linkedin.com/in/your-page" target="_blank">LinkedIn</a>
+    <a href="https://wa.me/your-number" target="_blank" aria-label="WhatsApp">WhatsApp</a>
+    <a href="https://www.facebook.com/your-page" target="_blank" aria-label="Facebook">Facebook</a>
+    <a href="https://www.instagram.com/your-page" target="_blank" aria-label="Instagram">Instagram</a>
+    <a href="https://www.linkedin.com/in/your-page" target="_blank" aria-label="LinkedIn">LinkedIn</a>
   </div>
   <p>© <span id="year"></span> We Host.</p>
 </footer>
 
 <script>
 document.getElementById('year').textContent = new Date().getFullYear();
-let listings = JSON.parse(localStorage.getItem('listings')) || [];
 
+// ----------------- CONFIG -----------------
+const repoOwner = "YOUR_GITHUB_USERNAME";
+const repoName = "YOUR_REPO_NAME";
+const branch = "main";
+const filePath = "listings.json";
+const githubToken = "YOUR_GITHUB_TOKEN"; // ⚠️ insecure in frontend, only for testing
+// ------------------------------------------
+
+let listings = [];
+let isAdmin = false;
+
+function sanitize(str) {
+  return str.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Fetch listings from GitHub
+async function fetchListings() {
+  const url = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch}/${filePath}`;
+  try {
+    const res = await fetch(url + '?t=' + Date.now());
+    if (!res.ok) throw new Error("Could not fetch listings");
+    listings = await res.json();
+  } catch (e) {
+    console.error(e);
+    listings = [];
+  }
+  renderListings();
+}
+
+// Save listings to GitHub
+async function saveListingsToGitHub() {
+  const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${filePath}`;
+
+  // Get current SHA
+  const res = await fetch(url, {
+    headers: { Authorization: `token ${githubToken}` }
+  });
+  const fileData = await res.json();
+  const sha = fileData.sha;
+
+  const content = btoa(JSON.stringify(listings, null, 2));
+
+  const body = {
+    message: "Update listings.json",
+    content,
+    sha,
+    branch
+  };
+
+  const putRes = await fetch(url, {
+    method: "PUT",
+    headers: {
+      Authorization: `token ${githubToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!putRes.ok) {
+    alert("Failed to save to GitHub");
+  }
+}
+
+// Render listings
 function renderListings() {
   const container = document.getElementById('listings');
   container.innerHTML = '';
   if(listings.length===0){ 
     container.innerHTML='<p style="text-align:center; color:rgba(255,255,255,0.5); width:100%;">No listings yet.</p>'; 
   }
-  listings.forEach(l=>{
+  listings.forEach((l,index)=>{
     const div=document.createElement('div');
     div.className='card';
-    div.innerHTML=`<h3>${l.title}</h3><p>${l.location}</p><p>Price: $${l.price}</p><a href="${l.url}" target="_blank">Open</a>`;
+    div.innerHTML=`
+      ${l.image ? `<img src="${l.image}" alt="${l.title}">` : ""}
+      <h3>${l.title}</h3>
+      <p>${l.location}</p>
+      <p>Price: R ${l.price}</p>
+      <a href="${l.url}" target="_blank">Open</a>
+    `;
+    if(isAdmin){
+      div.innerHTML += `
+        <button onclick="editListing(${index})">Edit</button>
+        <button onclick="deleteListing(${index})">Delete</button>
+      `;
+    }
     container.appendChild(div);
   });
+
+  // Update header buttons
+  const adminButtons = document.getElementById("adminButtons");
+  if(isAdmin){
+    adminButtons.innerHTML = `
+      <button onclick="showForm()">Add Listing</button>
+      <button onclick="logout()">Logout</button>
+    `;
+  } else {
+    adminButtons.innerHTML = `<button onclick="showLogin()">Admin Login</button>`;
+  }
 }
 
-function showForm(){ document.getElementById('formModal').style.display='flex'; }
+// --- Modal controls ---
+function showForm(index=null){ 
+  document.getElementById('formModal').style.display='flex'; 
+  if(index!==null){ 
+    const l = listings[index];
+    document.getElementById('formTitle').textContent="Edit Listing";
+    document.getElementById('editIndex').value=index;
+    document.getElementById('title').value=l.title;
+    document.getElementById('location').value=l.location;
+    document.getElementById('url').value=l.url;
+    document.getElementById('image').value=l.image || "";
+    document.getElementById('price').value=l.price;
+  } else {
+    document.getElementById('formTitle').textContent="Add Listing";
+    document.getElementById('editIndex').value="";
+    document.querySelector('#formModal form').reset();
+  }
+}
 function closeForm(){ document.getElementById('formModal').style.display='none'; }
+document.getElementById('formModal').addEventListener('click', e=>{ if(e.target.id==='formModal') closeForm(); });
 
-function saveListing(e){
+async function saveListing(e){
   e.preventDefault();
+  const index=document.getElementById('editIndex').value;
   const l={ 
-    title:document.getElementById('title').value, 
-    location:document.getElementById('location').value,
-    url:document.getElementById('url').value,
-    price:document.getElementById('price').value
+    title:sanitize(document.getElementById('title').value), 
+    location:sanitize(document.getElementById('location').value),
+    url:sanitize(document.getElementById('url').value),
+    image:sanitize(document.getElementById('image').value),
+    price:sanitize(document.getElementById('price').value)
   };
-  listings.unshift(l);
-  localStorage.setItem('listings', JSON.stringify(listings));
-  renderListings();
+  if(index){ listings[index]=l; } else { listings.unshift(l); }
+  await saveListingsToGitHub();
+  await fetchListings();
   closeForm();
   e.target.reset();
 }
 
-renderListings();
+async function deleteListing(index){
+  listings.splice(index,1);
+  await saveListingsToGitHub();
+  await fetchListings();
+}
+
+function editListing(index){
+  showForm(index);
+}
+
+// --- Admin login ---
+function showLogin(){ document.getElementById('loginModal').style.display='flex'; }
+function closeLogin(){ document.getElementById('loginModal').style.display='none'; }
+document.getElementById('loginModal').addEventListener('click', e=>{ if(e.target.id==='loginModal') closeLogin(); });
+
+function login(e){
+  e.preventDefault();
+  const pwd = document.getElementById('adminPassword').value;
+  const correctPassword = "wehost123"; // change this
+  if(pwd===correctPassword){
+    isAdmin=true;
+    closeLogin();
+    renderListings();
+  } else {
+    alert("Incorrect password");
+  }
+}
+function logout(){
+  isAdmin=false;
+  renderListings();
+}
+
+// Initial load
+fetchListings();
 </script>
 
 </body>
 </html>
-
-
-
-
-
-
